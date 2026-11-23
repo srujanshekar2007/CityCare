@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # CityCare
 
 CityCare is a civic issue reporting and resolution platform for citizens, one city administrator, and field workers. Citizens report a categorized issue with a description, photographs, and map coordinates. Administrators review reports and assign work; workers submit progress and resolution evidence; an administrator approves closure.
@@ -56,3 +57,6 @@ Original SVG assets live in `assets/brand/` and are copied into the web public d
 ## Future enhancements
 
 Complete citizen reporting with map selection and private image upload, build full admin and worker workflows, connect all dashboard metrics to Supabase queries, add responsive complaint mapping and CSV export, and verify role/ownership policies with a configured project. AI features are intentionally postponed.
+=======
+# CityCare
+>>>>>>> origin/main
