@@ -1,0 +1,7 @@
+{
+  "name": "citycare",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/web", "apps/api"],
+  "scripts": {"dev": "npm run dev --workspace @citycare/web", "dev:api": "npm run dev --workspace @citycare/api", "build": "npm run build --workspace @citycare/web && npm run build --workspace @citycare/api"}
+}

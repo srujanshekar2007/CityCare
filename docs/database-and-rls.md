@@ -1,0 +1,7 @@
+# Database and RLS
+
+The initial migration creates profiles, zones, categories, complaints, complaint media, complaint status updates, worker profiles, assignments, evidence, notifications, SLA policies, escalation history, feedback, and audit logs. Geographic coordinates use numeric latitude and longitude columns and a b-tree index; no PostGIS requirement is introduced.
+
+Roles are `citizen`, `worker`, and `admin`. New Auth users receive only `citizen` from a database trigger. Privileged roles must be granted by trusted project administration. Profile self-update policy preserves the current role. Citizens read their own complaints, workers read assigned complaints, and administrators manage complaints. Workers can only advance assigned task status under the table policy; only administrators may close work as resolved. The private Storage bucket restricts uploads to supported image formats and 10 MB.
+
+Complaint status changes are recorded by a database trigger. Keep audit and history writes in the trusted database layer. Important hardening work remains before production: add a strict transition matrix in a database function, inspect every policy with Supabase advisor, add updated-at triggers, validate storage object paths against assigned complaint membership during upload, and test policies with anon plus each role. The first API status endpoint writes ordinary complaint updates; future workflow endpoints should be routed through transaction-safe RPCs so state, history, and notification changes commit atomically.
