@@ -1,13 +1,7 @@
-# Demo account provisioning
+# Demo account verification
 
-Requested demo users:
+CityCare's demo accounts are managed in Supabase Authentication and must have matching rows in `public.profiles` with roles `admin`, `worker`, and `citizen`. Passwords are not stored in this repository or displayed by the login page.
 
-| Role | Email | Password |
-|---|---|---|
-| Admin | `admin@citycare.demo` | `Admin@123` |
-| Worker | `worker@citycare.demo` | `Worker@123` |
-| Citizen | `citizen@citycare.demo` | `Citizen@123` |
+To verify an account, open Supabase Dashboard → Authentication → Users, search by its email, and confirm the email is verified. Then check the corresponding `public.profiles` row and test the account through the deployed login form. Do not recreate an account when an Auth user already exists.
 
-These accounts are not provisioned in this workspace because no Supabase project credentials were supplied. The `Use demo account` action fills the login form; authentication still goes through Supabase Auth and checks the stored role. Running the provisioning script is a deliberate operation against the project configured in `.env`; it creates/updates only these named accounts and a small demo dataset. It does not reset data. Do not use these published passwords for real accounts.
-
-After running the script, manually test sign-in, role mismatch, logout, and direct API access for each demo user. Revoke or rotate these credentials before public deployment.
+The server-side provisioning scripts read passwords from environment variables when explicitly run. Keep those values in a trusted local/server environment and never place them in frontend variables or source control.

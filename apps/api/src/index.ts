@@ -1,26 +1,28 @@
 import dotenv from 'dotenv'
-dotenv.config({ path: new URL('../../../.env', import.meta.url) })
+dotenv.config({ path: new URL('../.env', import.meta.url) })
 import express from 'express'
 import cors from 'cors'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 
-const env = z.object({SUPABASE_URL:z.string().url(),SUPABASE_ANON_KEY:z.string().min(1),PORT:z.coerce.number().default(4000),WEB_ORIGIN:z.string().default('http://localhost:5173')}).safeParse(process.env)
+const env = z.object({SUPABASE_URL:z.string().url(),SUPABASE_PUBLISHABLE_KEY:z.string().min(1),PORT:z.coerce.number().default(4000),WEB_ORIGIN:z.string().default('http://localhost:5173')}).safeParse(process.env)
+function projectBaseUrl(value:string){const url=new URL(value);if(url.pathname==='/rest/v1'||url.pathname==='/rest/v1/')url.pathname='/';if(url.pathname!=='/'||url.search||url.hash)throw new Error('SUPABASE_URL must be the project base URL');return url.origin}
 const app=express()
 app.disable('x-powered-by')
 app.use(cors({origin:env.success?env.data.WEB_ORIGIN:'http://localhost:5173'}))
 app.use(express.json({limit:'32kb'}))
 app.get('/health',(_req,res)=>res.json({status:'ok',service:'citycare-api'}))
 if(env.success){
- const supabase=createClient(env.data.SUPABASE_URL,env.data.SUPABASE_ANON_KEY,{auth:{persistSession:false}})
+ const supabase=createClient(projectBaseUrl(env.data.SUPABASE_URL),env.data.SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false}})
  app.use(async(req,res,next)=>{
    if(req.path==='/health') return next()
    const token=req.header('authorization')?.replace(/^Bearer\s+/i,'')
    if(!token)return res.status(401).json({error:'Authentication required'})
    const {data:{user},error}=await supabase.auth.getUser(token)
-   if(error||!user)return res.status(401).json({error:'Invalid session'})
-   const userDb=createClient(env.data.SUPABASE_URL,env.data.SUPABASE_ANON_KEY,{global:{headers:{Authorization:`Bearer ${token}`}},auth:{persistSession:false}})
-   const {data:profile}=await userDb.from('profiles').select('id,role,active').eq('id',user.id).single()
+   if(error||!user){console.warn('[CityCare API auth] Token verification failed',{status:error?.status??null,code:error?.code??null});return res.status(401).json({error:'Invalid session'})}
+   const userDb=createClient(projectBaseUrl(env.data.SUPABASE_URL),env.data.SUPABASE_PUBLISHABLE_KEY,{global:{headers:{Authorization:`Bearer ${token}`}},auth:{persistSession:false}})
+   const {data:profile,error:profileError}=await userDb.from('profiles').select('id,role,active').eq('id',user.id).single()
+   if(profileError)console.warn('[CityCare API auth] Profile lookup failed',{code:profileError.code??null})
    if(!profile?.active)return res.status(403).json({error:'Account unavailable'})
    res.locals.user=user;res.locals.profile=profile;res.locals.db=userDb;next()
  })

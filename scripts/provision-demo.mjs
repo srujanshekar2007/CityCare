@@ -5,9 +5,9 @@ const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the server environment.')
 const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 const accounts = [
-  { email: 'admin@citycare.demo', password: 'Admin@123', full_name: 'City Administrator', role: 'admin' },
-  { email: 'worker@citycare.demo', password: 'Worker@123', full_name: 'Ravi Kumar', role: 'worker' },
-  { email: 'citizen@citycare.demo', password: 'Citizen@123', full_name: 'Asha Rao', role: 'citizen' },
+  { email: 'admin@citycare.demo', passwordEnv: 'CITYCARE_DEMO_ADMIN_PASSWORD', full_name: 'City Administrator', role: 'admin' },
+  { email: 'worker@citycare.demo', passwordEnv: 'CITYCARE_DEMO_WORKER_PASSWORD', full_name: 'Ravi Kumar', role: 'worker' },
+  { email: 'citizen@citycare.demo', passwordEnv: 'CITYCARE_DEMO_CITIZEN_PASSWORD', full_name: 'Asha Rao', role: 'citizen' },
 ]
 
 async function ensureUser(account) {
@@ -29,7 +29,11 @@ async function ensureUser(account) {
 }
 
 const users = {}
-for (const account of accounts) users[account.role] = await ensureUser(account)
+for (const account of accounts) {
+  const password = process.env[account.passwordEnv]
+  if (!password) throw new Error(`Set ${account.passwordEnv} in the server environment before running this script.`)
+  users[account.role] = await ensureUser({ ...account, password })
+}
 const { data: zone, error: zoneError } = await db.from('administrative_zones').upsert({ name: 'Central Bengaluru Demo', description: 'Fictional sample zone for demonstration' }, { onConflict: 'name' }).select().single()
 if (zoneError) throw zoneError
 const { error: workerError } = await db.from('workers').upsert({ user_id: users.worker.id, zone_id: zone.id, specialization: ['Road Damage / Potholes', 'Streetlight Problems'], availability: 'available' }, { onConflict: 'user_id' })
