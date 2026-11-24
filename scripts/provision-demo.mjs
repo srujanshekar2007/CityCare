@@ -23,7 +23,7 @@ async function ensureUser(account) {
     if (error) throw error
     user = data.user
   }
-  const { error: profileError } = await db.from('profiles').upsert({ id: user.id, full_name: account.full_name, email: account.email, role: account.role, active: true }, { onConflict: 'id' })
+  const { error: profileError } = await db.from('profiles').upsert({ id: user.id, full_name: account.full_name, email: account.email, role: account.role }, { onConflict: 'id' })
   if (profileError) throw profileError
   return user
 }
@@ -36,7 +36,7 @@ for (const account of accounts) {
 }
 const { data: zone, error: zoneError } = await db.from('administrative_zones').upsert({ name: 'Central Bengaluru Demo', description: 'Fictional sample zone for demonstration' }, { onConflict: 'name' }).select().single()
 if (zoneError) throw zoneError
-const { error: workerError } = await db.from('workers').upsert({ user_id: users.worker.id, zone_id: zone.id, specialization: ['Road Damage / Potholes', 'Streetlight Problems'], availability: 'available' }, { onConflict: 'user_id' })
+const { error: workerError } = await db.from('workers').upsert({ profile_id: users.worker.id, zone_id: zone.id, specialization: ['Road Damage / Potholes', 'Streetlight Problems'].join(', '), availability: 'available' }, { onConflict: 'profile_id' })
 if (workerError) throw workerError
 const { data: categories, error: categoryError } = await db.from('issue_categories').select('id,name')
 if (categoryError) throw categoryError

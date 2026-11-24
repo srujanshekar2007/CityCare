@@ -10,29 +10,30 @@ create table public.profiles (
   email text not null unique,
   phone text,
   role public.app_role not null default 'citizen',
-  active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create table public.administrative_zones (
   id uuid primary key default gen_random_uuid(), name text not null unique,
-  description text, created_at timestamptz not null default now()
+  description text, is_active boolean not null default true, created_at timestamptz not null default now()
 );
 create table public.issue_categories (
-  id smallint generated always as identity primary key,
-  name text not null unique, active boolean not null default true
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique, description text, is_active boolean not null default true,
+  created_at timestamptz not null default now()
 );
 insert into public.issue_categories(name) values
  ('Road Damage / Potholes'),('Garbage / Waste Management'),('Water Leakage'),('Drainage / Sewage Problems'),('Streetlight Problems'),('Footpath / Sidewalk Damage'),('Public Facility Problems'),('Traffic Infrastructure'),('Other');
 create table public.workers (
-  user_id uuid primary key references public.profiles(id) on delete cascade,
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null unique references public.profiles(id) on delete cascade,
   zone_id uuid references public.administrative_zones(id) on delete set null,
-  specialization text[] not null default '{}', availability text not null default 'available' check (availability in ('available','busy','unavailable')),
+  specialization text, availability text not null default 'available' check (availability in ('available','busy','unavailable')),
   created_at timestamptz not null default now()
 );
 create table public.complaints (
   id uuid primary key default gen_random_uuid(), complaint_number bigint generated always as identity unique,
-  citizen_id uuid not null references public.profiles(id), category_id smallint not null references public.issue_categories(id),
+  citizen_id uuid not null references public.profiles(id), category_id uuid not null references public.issue_categories(id),
   description text not null check (length(trim(description)) > 0), latitude numeric(9,6) not null check (latitude between -90 and 90), longitude numeric(9,6) not null check (longitude between -180 and 180),
   location_description text not null, zone_id uuid references public.administrative_zones(id) on delete set null,
   priority public.complaint_priority not null default 'Normal', status public.complaint_status not null default 'Reported',
@@ -59,7 +60,7 @@ create table public.complaint_updates (
 create index complaint_updates_history_idx on public.complaint_updates(complaint_id, created_at);
 create table public.worker_assignments (
   id uuid primary key default gen_random_uuid(), complaint_id uuid not null references public.complaints(id) on delete cascade,
-  worker_id uuid not null references public.workers(user_id), admin_id uuid not null references public.profiles(id),
+  worker_id uuid not null references public.workers(profile_id), admin_id uuid not null references public.profiles(id),
   assigned_at timestamptz not null default now(), deadline timestamptz not null,
   assignment_status text not null default 'active' check (assignment_status in ('active','completed','reassigned','cancelled')),
   instructions text
@@ -121,7 +122,7 @@ create policy "zones authenticated read" on public.administrative_zones for sele
 create policy "zones admin manage" on public.administrative_zones for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "categories read" on public.issue_categories for select to authenticated using (true);
 create policy "categories admin manage" on public.issue_categories for all to authenticated using (public.is_admin()) with check (public.is_admin());
-create policy "workers read relevant" on public.workers for select to authenticated using (user_id=auth.uid() or public.is_admin());
+create policy "workers read relevant" on public.workers for select to authenticated using (profile_id=auth.uid() or public.is_admin());
 create policy "workers admin manage" on public.workers for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "complaints citizen/admin/assigned read" on public.complaints for select to authenticated using (citizen_id=auth.uid() or public.is_admin() or public.is_assigned_to(id));
 create policy "citizens create own reported complaint" on public.complaints for insert to authenticated with check (public.current_role()='citizen' and citizen_id=auth.uid() and status='Reported' and rejection_reason is null and resolved_at is null);
@@ -172,7 +173,7 @@ begin
  if complaint_row.id is null then raise exception 'Complaint not found'; end if;
  if complaint_row.status not in ('Verified','Assigned') then raise exception 'Complaint must be verified before assignment'; end if;
  if target_deadline<=now() then raise exception 'Deadline must be in the future'; end if;
- if not exists(select 1 from public.workers w join public.profiles p on p.id=w.user_id where w.user_id=target_worker and p.role='worker' and p.active and w.availability<>'unavailable') then raise exception 'Worker is not active or available'; end if;
+ if not exists(select 1 from public.workers w join public.profiles p on p.id=w.profile_id where w.profile_id=target_worker and p.role='worker' and w.availability<>'unavailable') then raise exception 'Worker is not active or available'; end if;
  update public.worker_assignments set assignment_status='reassigned' where complaint_id=target_complaint and assignment_status='active';
  insert into public.worker_assignments(complaint_id,worker_id,admin_id,deadline,instructions) values(target_complaint,target_worker,auth.uid(),target_deadline,target_instructions) returning id into assignment_key;
  update public.complaints set status='Assigned',deadline=target_deadline,updated_at=now() where id=target_complaint;

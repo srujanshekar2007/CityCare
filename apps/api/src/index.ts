@@ -21,9 +21,9 @@ if(env.success){
    const {data:{user},error}=await supabase.auth.getUser(token)
    if(error||!user){console.warn('[CityCare API auth] Token verification failed',{status:error?.status??null,code:error?.code??null});return res.status(401).json({error:'Invalid session'})}
    const userDb=createClient(projectBaseUrl(env.data.SUPABASE_URL),env.data.SUPABASE_PUBLISHABLE_KEY,{global:{headers:{Authorization:`Bearer ${token}`}},auth:{persistSession:false}})
-   const {data:profile,error:profileError}=await userDb.from('profiles').select('id,role,active').eq('id',user.id).single()
+   const {data:profile,error:profileError}=await userDb.from('profiles').select('id,role').eq('id',user.id).single()
    if(profileError)console.warn('[CityCare API auth] Profile lookup failed',{code:profileError.code??null})
-   if(!profile?.active)return res.status(403).json({error:'Account unavailable'})
+   if(!profile)return res.status(403).json({error:'Account unavailable'})
    res.locals.user=user;res.locals.profile=profile;res.locals.db=userDb;next()
  })
  app.get('/api/me',(req,res)=>res.json({user:res.locals.user,profile:res.locals.profile}))
@@ -37,7 +37,7 @@ if(env.success){
  })
  app.post('/api/complaints',async(req,res)=>{
    if(res.locals.profile.role!=='citizen')return res.status(403).json({error:'Citizen access required'})
-   const schema=z.object({category_id:z.number().int().positive(),description:z.string().trim().min(1).max(5000),latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),location_description:z.string().trim().min(1).max(240)})
+   const schema=z.object({category_id:z.string().uuid(),description:z.string().trim().min(1).max(5000),latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),location_description:z.string().trim().min(1).max(240)})
    const parsed=schema.safeParse(req.body);if(!parsed.success)return res.status(400).json({error:'Invalid complaint details',fields:parsed.error.flatten().fieldErrors})
    const {data,error}=await res.locals.db.from('complaints').insert({...parsed.data,citizen_id:res.locals.user.id,status:'Reported'}).select().single()
    if(error)return res.status(400).json({error:'Unable to submit complaint'})
