@@ -1,0 +1,12 @@
+{
+  "dataset_type": "manually_labeled_synthetic_demonstration_pairs",
+  "possible_threshold": 0.5038,
+  "high_threshold": 0.9937,
+  "high_precision_calibration": {
+    "target_precision": 0.85,
+    "target_met": true,
+    "observed_precision": 1.0,
+    "predicted_count": 2
+  },
+  "method": "possible maximizes demonstration-set F1; high targets precision >= 0.85 with at least two predictions when attainable; otherwise uses most conservative candidate score."
+}

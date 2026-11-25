@@ -1,62 +1,91 @@
-<<<<<<< HEAD
 # CityCare
 
-CityCare is a civic issue reporting and resolution platform for citizens, one city administrator, and field workers. Citizens report a categorized issue with a description, photographs, and map coordinates. Administrators review reports and assign work; workers submit progress and resolution evidence; an administrator approves closure.
+CityCare is a civic complaint reporting and resolution platform for citizens, administrators, and field workers. This repository contains a React client, an authenticated Express API, Supabase integration, and an optional standalone Python intelligence service.
 
-**Tagline:** Your City. Your Voice. A Better Tomorrow.
+## Architecture
 
-## Current implementation status
+- `apps/web`: React 19, TypeScript, Vite, React Router, Recharts, Leaflet and the Supabase publishable client.
+- `apps/api`: Express 5 and TypeScript. It verifies Supabase access tokens, reads the user's profile role, and uses a publishable Supabase client with the caller's JWT so database permissions remain enforced by RLS.
+- `ml-service`: FastAPI NLP and geospatial analysis. The Express API is the only application integration path to its protected analysis endpoints.
+- Supabase: Authentication, PostgreSQL, Storage and Row Level Security.
 
-The independent foundation includes the React/TypeScript/Vite web app, Express/TypeScript REST API, original SVG brand assets, initial Supabase schema and row-level security, and setup documentation. With a configured Supabase project, the current app supports email/password sign-in, citizen issue submission with GPS/manual Leaflet location and private photo upload, citizen complaint lists, worker assignment-filtered task lists, and an admin complaint queue with live rows and status counts. Admin charts remain illustrative in preview mode. Full complaint detail and evidence review, worker task actions, notifications UI, zone/worker management screens, CSV reports, and complete analytics are still outstanding.
+The Python service is independently deployable. Adding it to the repository does not deploy it to Vercel. If the service is unavailable or not configured, existing complaint submission remains available and intelligence calls return a service-unavailable response.
 
-Supabase credentials were not available during implementation. Demo users have **not** been provisioned or tested, and the app will not authenticate those credentials until a project is configured and the provisioning script is run. The migration has not been applied or tested against a live Supabase project. See [Supabase setup](docs/supabase-setup.md).
+## Database notes
 
-## Stack
+The checked-in initial migration represents an earlier schema snapshot and is not authoritative for an already configured CityCare project. Existing app code and the project owner's verified live schema information indicate that `workers` uses `id`, `profile_id`, `zone_id`, `specialization`, `availability`, and `created_at`; category and zone activation use `is_active`; and assignments use `worker_id` plus the statuses `assigned`, `accepted`, `in_progress`, `submitted`, `completed`, and `reassigned`. Complaint analytics use the available complaint timestamps, `deadline`, coordinates, category and zone references, and `complaint_updates` history. Verify live foreign keys and RLS in Supabase before applying any migration. This intelligence upgrade does not change database schema, policies, or data.
 
-- Frontend: React, TypeScript, Vite, Tailwind CSS, React Router, Lucide, Recharts, Leaflet
-- API: Node.js, Express, TypeScript, Zod
-- Persistence/auth/storage: Supabase Auth, Postgres, Storage, RLS
-- Maps: Leaflet + OpenStreetMap tiles
+## Local setup
 
-## Local development
-
-Requirements: Node.js 20.19+ and npm. From the project root:
+Requirements: Node.js/npm and Python 3.9 or newer. Configure the existing frontend and API environment files using the examples, then start each service in a separate terminal from the repository root.
 
 ```sh
-cp .env.example .env
 npm install
 npm run dev
+npm run dev:api
 ```
 
-Run the API separately with `npm run dev:api`. Add project-specific Supabase values to `.env` first. Never place the service-role key in a `VITE_` variable or commit it. The API health endpoint is `GET /health` on port 4000.
+The web client defaults to `http://localhost:5173`; Express defaults to `http://localhost:4000`.
 
-## Environment
+### Environment variables
 
-`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are public client configuration values. `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are server-side configuration; only the API provisioning utilities may use the service role. `.env.example` contains placeholders.
+Frontend (`apps/web/.env`):
 
-## Database
+- `VITE_SUPABASE_URL`: Supabase project URL.
+- `VITE_SUPABASE_PUBLISHABLE_KEY`: publishable/anon key. Never put a secret or service-role key in a `VITE_` variable.
+- `VITE_API_URL`: Express base URL, normally `http://localhost:4000`.
 
-Apply `supabase/migrations/202611230001_initial_schema.sql` to a fresh Supabase project using the Supabase CLI or SQL editor. It creates the three allowed roles, categories, complaint workflow tables, history, notifications, audit records, RLS policies, and a private evidence bucket. Details and known implementation limits are in [database and RLS notes](docs/database-and-rls.md).
+Express (`apps/api/.env`):
 
-## Demo accounts
+- `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`: server-side token validation and caller-scoped RLS queries.
+- `PORT`, `WEB_ORIGIN`: API port and exact allowed browser origin.
+- `ML_SERVICE_URL`: FastAPI base URL, normally `http://127.0.0.1:8001`.
+- `ML_SERVICE_TOKEN`: shared server-to-server bearer secret. Generate a private value, for example `openssl rand -hex 32`; set the same value in the Python environment. Do not use it in frontend configuration.
+- `ML_REQUEST_TIMEOUT_MS`, `ML_MAX_CANDIDATES`: bounded API timeout and candidate count.
 
-The login page displays the requested demo credentials and explains that provisioning is required. Run `node scripts/provision-demo.mjs` only against a dedicated CityCare Supabase project with server credentials configured. It creates or updates the demo accounts and a small sample dataset; it does not reset or delete project data. Verify each login manually after provisioning. Credentials are documented in [demo provisioning](docs/demo-accounts.md).
+Python (`ml-service/.env`): copy `ml-service/.env.example`, set the same private `ML_SERVICE_TOKEN`, and adjust model settings as documented in [ml-service/README.md](ml-service/README.md). Local Python binds to loopback by default. For a remote deployment, set appropriate host/network restrictions and a trusted secret manager.
 
-## Deploy
+All actual `.env` files are ignored by Git. The committed examples contain placeholders only.
 
-The static Vite frontend can be deployed to Vercel or another static host. Deploy the Express API to a Node host such as Render. Configure CORS to the exact frontend origin, set server environment variables, apply migrations, and set Supabase Auth redirect URLs. Hosting plans and free-tier limits change; check provider terms before deployment. A deployment checklist is in [deployment](docs/deployment.md).
+## Start Python intelligence locally
 
-## API
+In another terminal:
 
-Initial endpoints: `GET /health`, `GET /api/me`, `GET /api/complaints`, `POST /api/complaints`, and `PATCH /api/complaints/:id/status`. Authenticated endpoints verify the Supabase JWT, read role from the database, validate request bodies with Zod, and rely on RLS for data access. See [API notes](docs/api.md).
+```sh
+cd ml-service
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Put a private ML_SERVICE_TOKEN in ml-service/.env and apps/api/.env
+uvicorn app.main:app --host 127.0.0.1 --port 8001
+```
 
-## Brand assets
+The service does not need database credentials and does not connect to Supabase. Express retrieves only caller-visible records and forwards a bounded, minimized payload.
 
-Original SVG assets live in `assets/brand/` and are copied into the web public directory: wordmark, icon, dark-background wordmark, and favicon. The mark combines a location pin, city skyline, and completion check.
+## Build and verification
 
-## Future enhancements
+```sh
+npm run build
+ml-service/.venv/bin/python -m pytest -q ml-service/tests
+ml-service/.venv/bin/python ml-service/scripts/run_evaluation.py
+git diff --check
+```
 
-Complete citizen reporting with map selection and private image upload, build full admin and worker workflows, connect all dashboard metrics to Supabase queries, add responsive complaint mapping and CSV export, and verify role/ownership policies with a configured project. AI features are intentionally postponed.
-=======
-# CityCare
->>>>>>> origin/main
+The committed evaluation artifact comes from a manually labeled fictional demonstration set. Its metrics are resubstitution results and do not predict performance on real complaint data. Real evaluation requires privacy-reviewed, representative complaint pairs labeled by authorized reviewers.
+
+## Deployment
+
+Deploy the static frontend, Express API, and Python service separately. Configure `VITE_API_URL` in the frontend build environment; set Supabase and intelligence variables only on the API host; set `ML_SERVICE_TOKEN` on both server hosts; configure `WEB_ORIGIN` to the exact deployed client origin. Restrict the Python service to network access from the API and use TLS for remote service-to-service traffic. Configure Supabase Auth redirects and verify deployed RLS policies separately. A Vercel frontend deployment alone does not host the Express or Python services.
+
+## Privacy and operation
+
+Duplicate analysis is advisory; it never merges, deletes, rejects or updates complaints. Admin analysis and hotspots use records visible to the current user under Supabase RLS. Citizen duplicate comparison is likewise limited to rows visible to that user's RLS policies. The Python API is protected by a server-to-server token and must not be exposed as an unauthenticated public service. No citizen names, contact details, evidence images, or credentials are included in intelligence payloads or routine service logs.
+
+## Known limits
+
+- The default semantic Sentence Transformers model is disabled; lexical analysis remains available. Enabling semantic embeddings may require downloading model weights and extra dependencies.
+- Duplicate comparisons are bounded to recent RLS-visible records; responses report when the configured candidate cap is reached.
+- Hotspot results reflect only geocoded records visible to the administrator and are bounded by the API request limit.
+- Duplicate analysis history is session-only. Persistent analysis history would require a separately reviewed schema change, which this task does not make.
+- End-to-end Supabase, deployed Vercel, cross-service network, and role session behavior require configured project credentials and deployment access; local unit/build checks do not establish those results.
